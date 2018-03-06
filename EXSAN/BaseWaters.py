@@ -18,7 +18,7 @@ def dateToStamp(dateString):
     import time
     return time.mktime(datetime.datetime.strptime(dateString, "%d/%m/%Y").timetuple())
 #updateCutoffDate = '06/05/2017'
-updateCutoffDate = '06/10/2017'
+updateCutoffDate = '03/01/2018'
 updateCutoffStamp = dateToStamp(updateCutoffDate)
 
 ACCEPTOR_DATA = {
@@ -179,7 +179,7 @@ def reduceBaseWaters(wats,ot,resNum,radius):
     PRINT(str(len(close))+" waters in radius")
     return close
 
-def residueMap(target):
+def residueMapOld(target):
     if (len(target.atoms) < 1):
         return {}
     curRes = target.atoms[0].residueNumber
@@ -199,11 +199,34 @@ def residueMap(target):
             curRes = a.residueNumber
             
     return ret
+def residueMap(target):
+    resMap = []
+    count = 0
+    curChain = target.atoms[0].chain
+    curRes = target.atoms[0].residueNumber
+    resMap = [(target.atoms[0].chain,target.atoms[0].residueNumber)]
+    for a in target.atoms:
+        update = False
+        if (a.chain != curChain):
+            update = True
+            curRes = a.residueNumber
+            curChain = a.chain
+        if (curRes < a.residueNumber):
+            update = True
+            curRes = a.residueNumber
+        if update:
+            tup = (a.chain,a.residueNumber)
+            resMap.append(tup)
+            count+=1
+        a.chain = "A"
+        a.residueNumber = count+1
+    return resMap
 def makeBaseWaters(CONSTANTS,tree,target):
     import ZMAT
     import subprocess
     import WaterLayer
     rmap = residueMap(target)
+    
     commonFolder = CONSTANTS["commonFolder"]
     #Find a point far from any atoms in the target
     GRAIN = 10
@@ -229,7 +252,12 @@ def makeBaseWaters(CONSTANTS,tree,target):
         if file.endswith(".zmat"):
             zmatChoices.append(file)
     zmatChoices = sorted(zmatChoices, key=lambda x: len(x))
-    smallest = zmatChoices[0]
+    if (len(zmatChoices) == 0):
+        monoFilename = "G_aa1.zmat"
+        ZMAT.createZMAT(monoFilename)
+        smallest = monoFilename
+    else:
+        smallest = zmatChoices[0]
 
  
     locationZmat = commonFolder+"/"+smallest
@@ -290,27 +318,28 @@ def makeBaseWaters(CONSTANTS,tree,target):
     ballDump.close()
     '''
     backAry = back.split("\n")
-    '''
-    for key in rmap:
-        print(key)
-        cChain = rmap[key] 
-        for i in range(len(cChain)):
-            res = cChain[i]
-            print("\t",i,"->",res)
-    '''
+
+
     
     watGenFileName = "%s/%sWatgenBase.pdb"%(commonFolder,CONSTANTS["tpName"])
     outf = open(watGenFileName,'w')
     watgenValid = False
     receivedAtoms = False
+    print(len(rmap))
     for line in backAry:
         if (line[:4] == "ATOM"):
             a = PDBTools.Atom(line)
             if (a.valid):
                 receivedAtoms = True
-            if (a.chain in CONSTANTS["targetProteinChain"]):
-                #print(a.toPDBLine(),"  ->   ",a.chain,",",a.residueNumber)
-                a.residueNumber = rmap[a.chain][a.residueNumber-1]
+            if (a.chain == "A"):
+                try:
+                    tup = rmap[a.residueNumber-1]
+                except:
+                    print(a)
+                if (tup[0] == "F"):
+                    print(tup,a)
+                a.chain = tup[0]
+                a.residueNumber = tup[1]
             if (a.residueType == "WAT"):
                 watgenValid = True
             outf.write(a.toPDBLine()+"\n")          

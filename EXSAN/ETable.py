@@ -11,8 +11,8 @@ class EnergyTable:
     TABLE_FILENAME = "ETable.tsv"
     def __init__(me):
         me.table = []
-        me.types = [int,float,int,float,int,float,int,int,int,int,float]
-        me.colToParam = ["Pose","Energy","#MissWat","EMissWat","#HBond","EHBond","#HyPhobic","#BadPocket","#BulkFace","#Salt","ESide"]
+        me.types = [int,float,int,float,int,float,int,int,int,int,int,int,float]
+        me.colToParam = ["Pose","Energy","#MissWat","EMissWat","#HBond","EHBond","#HyPhobic","#BadPocket","#BulkFace","#Salt","#LysDP","#PAmide","ESide"]
         me.width = len(me.colToParam)
         me.paramToCol = {}
         me.lastWritten = -1

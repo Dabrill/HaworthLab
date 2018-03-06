@@ -3,21 +3,26 @@ class Heap:
         me.array = [None] * n
         me.size = 0
         me.dict = {}
+        #me.idFunc = idFunc
         me.keyFunc = key
     def applyKey(me,element):
+        #element = me.array[index]
         return me.keyFunc(element)
     def parent(me,i):
         return int((i-1)/2)
     def insert(me,item):
         if (me.size == len(me.array)):
             me.array.append(None)
+        #ID = me.idFunc(item)
+        #me.dict[ID] = me.size
         me.array[me.size] = item
         me.heapifyUp(me.size)
         me.size+=1
     def delete(me,i):
-        me.array[i] = me.array[me.size-1]
+        delNode = me.array[i]
+        me.swap(i,me.size-1)
         me.size-=1
-        me.heapifyDown(i)   
+        me.heapifyDown(i)  
     def changeKey(me,ID,val):
         raise NotImplemented("Cannot yet change key")
         i = me.dict[ID]
@@ -28,6 +33,13 @@ class Heap:
         me.heapifyDown(i)
         return i
     def swap(me,i,j):
+        '''
+        I_ID = me.idFunc(me.array[i])
+        J_ID = me.idFunc(me.array[j])
+        me.dict[I_ID] = j
+        me.dict[J_ID] = i
+        '''
+        #print("Swap ",i,j)
         temp = me.array[i]
         me.array[i] = me.array[j]
         me.array[j] = temp

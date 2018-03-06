@@ -5,6 +5,8 @@ import Permutations
 import os
 targetProtein = None
 targetLigand = None
+alignData = None
+CONSTANTS = None
 def readTPFile(filepath,chains,xrayChain):
     global targetProtein
     global targetLigand
@@ -54,9 +56,42 @@ def grabPoseScoreDataFromFile(poses,file):
                     return ret
                     
     return ret
-def grabScoringData(poses):
+def grabDisplacedWaters(poses,onlyOxygen):
+    global alignData
+    global CONSTANTS
+    import BaseWaters
+    ret = [None] * len(poses)
     align = grabPoseScoreDataFromFile(poses,"alignDump.dtf")
     print("Loaded align")
+    baseWaters = BaseWaters.setupBaseWaters(CONSTANTS)
+    for bw in baseWaters:
+        for bwAtm in bw:
+            bwAtm.chain = "M"
+    print("Loaded base waters")
+    for i in range(len(poses)):
+        poseAlignString = align[i]
+        ret[i] = []
+        #print("\nPose %i:"%poses[i])
+        for line in poseAlignString.split("\n"):
+            if (line[:4] == "\tWat"):
+                atIndex = line.find("@")
+                waterNumber = int(line[4:atIndex])
+                waterTuple = baseWaters[waterNumber-1]
+                waterOxygen = waterTuple[0]
+                #print("\t",waterNumber,"\t",waterOxygen)
+                if onlyOxygen:
+                    ret[i].append((waterOxygen,))
+                else:
+                    ret[i].append(waterTuple)
+    return ret
+    
+def grabScoringData(poses):
+    global alignData
+    if alignData is None:
+        align = grabPoseScoreDataFromFile(poses,"alignDump.dtf")
+        print("Loaded align")
+    else:
+        print("Align already loaded")
     side = grabPoseScoreDataFromFile(poses,"sideDump.dtf")
     print("Loaded side")
     hbond = grabPoseScoreDataFromFile(poses,"HBondTable.dtf")
@@ -97,7 +132,8 @@ class Application(tk.Frame):
         includeTarget = self.includeTarget.get()
         includeXRay = self.includeXRay.get()
         makeScoreFile = self.makeScoreFile.get()
-        if (water == 1):
+        displacedWater = self.displacedWaters.get()            
+        if (water in [1,3]):
             try:
                 poseWater = Permutations.WaterPermutations.readCWF("Water.cwf")
             except:
@@ -130,12 +166,20 @@ class Application(tk.Frame):
                 outfile.write(str(targetProtein)+"TER\n")
         if (includeXRay == 1):
             if (fileType == 1):
-                outfile.write(str(targetLigand)+"TER\n")   
-        for p in poseList:
+                outfile.write(str(targetLigand)+"TER\n")
+        if (displacedWater < 3):
+            displacedWaterPoseList = grabDisplacedWaters(poseList,displacedWater == 2)
+        for i in range(len(poseList)):
+            p = poseList[i]
             poseStr = ""
             poseStr+=ligands.getPosePDB(p,False)
-            if (water == 1):
-                poseStr+=poseWater.grabPoseString(p,hydrogens==1)
+            if water in [1,3]:
+                poseStr+=poseWater.grabPoseString(p,water==3)
+            if (displacedWater < 3):
+                for dWater in displacedWaterPoseList[i]:
+                    for dWaterAtm in dWater:
+                        poseStr+="%s\n"%dWaterAtm.toPDBLine()
+                
             poseStr+="TER"+str(p)+"\n"
             if (fileType == 1):
                 outfile.write(poseStr)
@@ -188,7 +232,8 @@ class Application(tk.Frame):
         #self.water = 1
         self.radios = []
         group = []
-        group.append(tk.Radiobutton(self, text="Water", variable=self.water, value=1))
+        group.append(tk.Radiobutton(self, text="Water Oxygens", variable=self.water, value=1))
+        group.append(tk.Radiobutton(self, text="Water HOH", variable=self.water, value=3))
         group.append(tk.Radiobutton(self, text="No Water", variable=self.water, value=2))
         self.radios.append(group)
         self.hydrogen = tk.IntVar()
@@ -196,6 +241,13 @@ class Application(tk.Frame):
         group = []
         group.append(tk.Radiobutton(self, text="Hydrogen", variable=self.hydrogen, value=1))
         group.append(tk.Radiobutton(self, text="No Hydrogen", variable=self.hydrogen, value=2))
+        self.radios.append(group)
+        self.displacedWaters = tk.IntVar()
+        self.displacedWaters.set(3)
+        group = []
+        group.append(tk.Radiobutton(self, text="Displaced Waters", variable=self.displacedWaters, value=1))
+        group.append(tk.Radiobutton(self, text="Displaced Water Oxygens", variable=self.displacedWaters, value=2))
+        group.append(tk.Radiobutton(self, text="None", variable=self.displacedWaters, value=3))
         self.radios.append(group)
         self.fileType = tk.IntVar()
         self.fileType.set(2)
@@ -265,15 +317,21 @@ class Application(tk.Frame):
         me.textInstr.set(dispName)
         me.selections.config(state="disabled")
         me.allSubRand.set(2)
-        for r in me.radios[4]:
+        for r in me.radios[6]:
             r.config(state="disabled")
         return filename
 def getTPName():
+    global CONSTANTS
     import json
     with open('../constants.json') as data_file:
         CONSTANTS = json.load(data_file)
         readTPFile(CONSTANTS["commonFolder"]+"/"+CONSTANTS["targetProtein"],CONSTANTS["targetProteinChain"],CONSTANTS.get("xrayChain",None))
+
 TARGET_LOC = getTPName()
 app = Application()                       
 app.master.title('Retrieve TRUMP poses')    
 app.mainloop()
+'''
+getTPName()
+grabDisplacedWaters([1,5,10])
+'''

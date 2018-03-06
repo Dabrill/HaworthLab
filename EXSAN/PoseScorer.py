@@ -160,7 +160,7 @@ class PoseScorer(multiprocessing.Process):
             if not ignoreWater:
                 #Water Alignment
                 expected,neighWaters = self.expectedAndNeighborhoodWaters(poseTree,poseWaters)
-                align = alignWater(self.baseWaters,pose,wTree,reduced = neighWaters)
+                align = alignWater(bwTree,pose,poseWaters)
                 #align = []
 
                 alignStr+="Present in ligand structure:\n"
@@ -225,6 +225,8 @@ class PoseScorer(multiprocessing.Process):
             badPocket = 0
             bulkNumber = 0
             saltNumber = 0
+            pamideNumber = 0
+            lysineDPNumber = 0
             sideEnergyTotal = 0.0
             for datum in sideChainData:
                 rowKind = datum[ColumnValue.KIND.value]
@@ -237,12 +239,18 @@ class PoseScorer(multiprocessing.Process):
                     bulkNumber+=1
                 if (rowKind == Kind.SALT_BRIDGE):
                     saltNumber+=1
+                if (rowKind == Kind.PLANAR_AMIDE):
+                    pamideNumber+=1
+                if (rowKind == Kind.LYSINE_DP):
+                    lysineDPNumber+=1
                 sideEnergyTotal+=rowEnergy
                 #print(datum)
             results.append((hydrophobicNumber,"#HyPhobic"))
             results.append((bulkNumber,"#BulkFace"))
             results.append((badPocket,"#BadPocket"))
             results.append((saltNumber,"#Salt"))
+            results.append((lysineDPNumber,"#LysDP"))
+            results.append((pamideNumber,"#PAmide"))
             results.append((sideEnergyTotal,"ESide"))
             
             totalEnergy = missingEnergy + hbEnergyTotal + sideEnergyTotal
@@ -530,6 +538,8 @@ def findPlanarAmide(CONSTANTS,pose,target,tRes):
             within = target.radiusSearch(stem.location,searchLength,True, condition = lambda x : x.residueType in amideData)
             for neigh,cDist in within:
                 seenKey = (neigh.chain,neigh.residueNumber)
+                if (seenKey == (CA.chain,CA.residueNumber)):
+                    continue
                 if seenKey not in seenResidues:
                     #print("\t",neigh,seenKey)
                     seenResidues.add(seenKey)
@@ -538,23 +548,26 @@ def findPlanarAmide(CONSTANTS,pose,target,tRes):
                     except:
                         #print("\tIncomplete")
                         continue
-                    ligV = ligData["S"].location.difference(ligData["C"].location).unitVector()
+
                     tpV = tpData["S"].location.difference(tpData["C"].location).unitVector()
+                    lC_tS_V = ligData["C"].location.difference(tpData["S"].location).unitVector()
                     #print("\t\tVec: ",ligV.dotProduct(tpV))
-                    if (ligV.dotProduct(tpV) < -0.7):       
-                        ligNormal = ligData["S"].location.planeNormal(ligData["A"].location,ligData["D"].location)
-                        tpNormal = tpData["S"].location.planeNormal(tpData["A"].location,tpData["D"].location)
-                        #print("\t\tPlane: ",abs(ligNormal.dotProduct(tpNormal)))
-                        if (abs(ligNormal.dotProduct(tpNormal)) >= 0.5):
-                            distA = ligData["D"].distance(tpData["A"])
-                            if (distA <= contactLength):
-                                distB = tpData["D"].distance(ligData["A"])
-                                if (distB <= contactLength):
-                                    #print(distA,distB)
-                                    contacts.append((Kind.PLANAR_AMIDE,tpData["C"].resStr(),ligData["C"].resStr(),"Planar Amide",cDist,value))
+                    if (lC_tS_V .dotProduct(tpV) < -0.7):
+                        ligV = ligData["S"].location.difference(ligData["C"].location).unitVector()
+                        if (ligV.dotProduct(tpV) < -0.8):
+                            ligNormal = ligData["S"].location.planeNormal(ligData["A"].location,ligData["D"].location)
+                            tpNormal = tpData["S"].location.planeNormal(tpData["A"].location,tpData["D"].location)
+                            #print("\t\tPlane: ",abs(ligNormal.dotProduct(tpNormal)))
+                            if (abs(ligNormal.dotProduct(tpNormal)) >= 0.5):
+                                distA = ligData["D"].distance(tpData["A"])
+                                if (distA <= contactLength):
+                                    distB = tpData["D"].distance(ligData["A"])
+                                    if (distB <= contactLength):
+                                        #print(distA,distB)
+                                        contacts.append((Kind.PLANAR_AMIDE,tpData["C"].resStr(),ligData["C"].resStr(),"Planar Amide",cDist,value))
     return contacts
     
-def findLysineDP(CONSTANTS,pose,target,tRes):
+def findLysineDP(CONSTANTS,pose,target):
     value = CONSTANTS['lysineDPEnergy']
     contactLength = 3.2
     contacts = []
@@ -565,8 +578,11 @@ def findLysineDP(CONSTANTS,pose,target,tRes):
             #print(NZ)
             within = target.radiusSearch(NZ.location,contactLength,True, condition = lambda x : x.atomType[0] == "O")
             if (len(within) >= 2):
-                dist = max(within, lambda x : x[1])[1]
-                contacts.append((Kind.LYSINE_DP,"%s & %s"%(within[0][0].resStr(),within[0][1].resStr()),NZ.resStr(),"Lysine DP",dist,value))
+                if (within[0][0].residueNumber == within[1][0].residueNumber):
+                    del within[1]
+            if (len(within) >= 2):
+                dist = max(within, key =  lambda x : x[1])[1]
+                contacts.append((Kind.LYSINE_DP,"%s & %s"%(within[0][0].resStr(),within[1][0].resStr()),NZ.resStr(),"Lysine DP",dist,value))
                 #print("\tHas DP")
     return contacts
 def oxygenReplacement(waters,poseTree,ignore):
@@ -635,41 +651,27 @@ def missingWaters(expected,align):
     alignedSet = set([a for a in align if a != 0])
     missingNumbers = expectedSet.difference(alignedSet)
     return list(filter(lambda e: e.residueNumber in missingNumbers, expected))
-def alignWater(baseWaters,pose,poseWaterTree, cutoff = 2.2, reduced = None):
+def alignWater(baseWaterTree,pose,poseWaters, cutoff = 2.2, sumCutoff = 3.5):
     def addEdge(graph,left,right,dist = None):
         Xstr = "X"+str(left.residueNumber)
-        graph.addNode(Xstr)
-        if (graph.getEdge("S",Xstr) == None):
-            graph.addEdge("S",Xstr,0)
+        graph.addNode(Xstr)            
         if dist is None:
             dist = left.distance(right)
         Ystr = "Y"+str(right.residueNumber)
         graph.addNode(Ystr)
         graph.addEdge(Xstr,Ystr,dist)
-        if (graph.getEdge(Ystr,"T") == None):
-            graph.addEdge(Ystr,"T",0)
-    BOX_SIZE = 6.0
-    CUTOFFSQ = cutoff**2
-    poseWaters = poseWaterTree.myList
+    baseWaters = baseWaterTree.myList
     align = [0] * len(poseWaters)
-    if reduced is None: 
-        reduced = waterBox(baseWaters,pose.atoms,BOX_SIZE)
-    poseSeen = []
+    poseSeen = [[] for  i in range(len(poseWaters))]
     baseSeen = [0] * len(baseWaters)
-    for i in range(len(poseWaters)):
-        poseSeen.append([])
-
-    for bwWater in reduced:
-        neighbors = poseWaterTree.radiusSearch(bwWater.location,2.2,True)
-        bI =  bwWater.residueNumber
+    for pI in range(len(poseWaters)):
+        pw = poseWaters[pI]
+        neighbors = baseWaterTree.radiusSearch(pw.location,cutoff,True)
         for neigh, neighDist in neighbors:
-            pI = neigh.residueNumber
-            poseSeen[pI-1].append((bI,neighDist))
+            bI = neigh.residueNumber
+            poseSeen[pI].append((bI,neighDist))
             baseSeen[bI-1]+=1 
     graph = Network.Network()
-    graph.cutoff = cutoff
-    graph.addNode("S")
-    graph.addNode("T")
     for i in range(len(poseSeen)):
         X = poseWaters[i]
         if (len(poseSeen[i]) == 1):
@@ -682,13 +684,22 @@ def alignWater(baseWaters,pose,poseWaterTree, cutoff = 2.2, reduced = None):
             BWIndex, d = poseSeen[i][j]
             Y = baseWaters[BWIndex-1]
             addEdge(graph,X,Y,d)
-    result = graph.leastCostMatching()
-
-    for match in result:
-        xn = int(match[0][1:])
-        yn = int(match[1][1:])
-        align[xn-1] = yn
-
+    allSubgraphs = graph.splitIntoSubgraphs()
+    for i in range(len(allSubgraphs)):
+        subgraph = allSubgraphs[i]
+        subgraph.cutoff = sumCutoff
+        subgraph.addNode("S")
+        subgraph.addNode("T")
+        for subNodeID in subgraph.nodes:
+            if (subNodeID[0] == "X"):
+                subgraph.addEdge("S",subNodeID,0)
+            elif (subNodeID[0] == "Y"):
+                subgraph.addEdge(subNodeID,"T",0)
+        result = subgraph.leastCostMatching(verbose=False)
+        for match in result:
+            xn = int(match[0][1:])
+            yn = int(match[1][1:])
+            align[xn-1] = yn
     return align
 def getTargetDict(targetByChain,addH = False):
     grand = {}

@@ -105,8 +105,11 @@ def evaluatePotentialHydrogenBond(atom,contact,CA,C,O,H,Stem):
     hb.validGeo = True
     '''
     print("\n")
-    print(atom,contact)
-    print(vectorCos,oAng,hCos)
+    print(Stem,H,O,hDist)
+    print(Stem.location)
+    print(H.location)
+    print(O.location)
+    print("Vector cos %3.2f, oAng %3.2f, hCos %3.2f, PlaneSin %3.2f"%(vectorCos,oAng,hCos,pnSin))
     '''
     if (vectorCos < 0) and (oAng > 100) and (hCos < 0):
         hb.validGeo = True

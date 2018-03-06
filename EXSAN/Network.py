@@ -68,20 +68,34 @@ class Heap:
         me.heapifyUp(me.size)
         me.size+=1
     def delete(me,i):
+        #print("\nDelete ",i)
+        #print(me.dispAry())
+        #print(me.dict)
         val = me.array[i].ID
-        me.array[i] = me.array[me.size-1]
+        delNode = me.array[i]
+        rememberCost = delNode.cost
+        me.array[i].cost = None
+        me.swap(i,me.size-1)
+        #print(me.dispAry())
         me.size-=1
-        me.heapifyDown(i)   
-        me.dict[val] = None
+        me.heapifyDown(i)  
+        
+        delNode.cost = rememberCost
+        #print(me.dispAry())
+        #print(me.dict)
     def changeKey(me,ID,val):
         i = me.dict[ID]
+        #print("Change ",ID,i," to ",val)
         if (i == None):
             return None
         me.array[i].cost = val
         me.heapifyUp(i)
         me.heapifyDown(i)
-        return i
+        #print(me.dispAry())
+        #print(me.dict)
+        
     def swap(me,i,j):
+        #print("Swap %i,%i"%(i,j))  
         me.dict[me.array[i].ID] = j
         temp = me.array[i]
         me.array[i] = me.array[j]
@@ -115,6 +129,17 @@ class Heap:
         ret = me.array[0]
         me.delete(0)
         return ret
+    def dispAry(me):
+        s = "["
+        for i in range(me.size):
+            if (i != 0):
+                s+=","
+            if (me.array[i].cost is None):
+                s+="%s(N)"%(me.array[i].ID)
+            else:
+                s+="%s(%2.1f)"%(me.array[i].ID,me.array[i].cost)
+        s+="]"
+        return s
 class Network:
     def __init__(me):
         me.nodes = {}
@@ -175,8 +200,46 @@ class Network:
                 if toID not in explored:
                     queue.append((toID ,depth+1))
                     explored.add(toID)
-        
-    def shortestPath(me,start,end):
+    def nodeInSubgraph(me,fromNode):
+        explored = set([fromNode])
+        queue = [fromNode]
+        #print(fromNode)
+        while (len(queue) > 0):
+            at = queue.pop()
+            #print("\t",at)
+           
+            curNode = me.nodes[at]
+            #print(curNode.edges)
+            #print(curNode.rEdges)
+            for edge in curNode.edges:
+                toID = edge.sink.ID
+                if toID not in explored:
+                    queue.append(toID)
+                    explored.add(toID)
+            for edge in curNode.rEdges:
+                toID = edge.source.ID
+                if toID not in explored:
+                    queue.append(toID)
+                    explored.add(toID)
+        return explored
+    def splitIntoSubgraphs(me):
+        seen = set()
+        ret = []
+        for ID in me.nodes:
+            if ID not in seen:
+                nodesInSub = me.nodeInSubgraph(ID)
+                sub = Network()
+                for s in nodesInSub:
+                    seen.add(s)
+                    transfer = me.nodes[s]
+                    sub.nodes[transfer.ID] = transfer
+                    for e in transfer.edges:
+                        sub.edgeList.append(e)
+                ret.append(sub)
+        return ret
+                
+                
+    def shortestPath(me,start,end,verbose = False):
   
         H = Heap(len(me.nodes))
         prior = {}
@@ -188,9 +251,16 @@ class Network:
         H.changeKey(start,0)
         Done = False         
         while (H.openPaths()):
+            if verbose:
+                pass
+                #print(H.dispAry())
+            
             u = H.extractMin()
+            #print("Min is ",u.ID)
             u.exp = True
-            #print("%s(%.2f)"%(u.ID,u.cost),end=",")
+            if verbose:
+                pass
+                #print("\t\t",u.ID,u.cost,prior[u.ID])
             if (u.ID == end):
                 break
             for edge in u.edges:
@@ -199,11 +269,11 @@ class Network:
                     dist = u.cost + edge.wholeCost()
                     if (v.cost is None) or (dist < v.cost):
                         H.changeKey(v.ID,dist)
-                        prior[v.ID] = u.ID       
+                        prior[v.ID] = u.ID
+            #print("\n\n")
         path = [end]
         cur = end
         total = 0
-        #print("")
         while not (cur == start):
             if (prior[cur] == None):
                 return
@@ -215,34 +285,30 @@ class Network:
             cur = prior[cur]
             path.append(cur)
         path.reverse()
-        '''
-        print(path)
-        for nodeID in me.nodes:
-            print("\t",nodeID,me.nodes[nodeID].price)
-        '''
-        
         if (total <= me.cutoff):
             return path
         return None             
-    def leastCostMatching(me,s="S",t="T"):
+    def leastCostMatching(me,s="S",t="T",verbose = False):
         me.findPrice(s,t)
-        path = me.shortestPath(s,t)
+        path = me.shortestPath(s,t,verbose)
+        if verbose:
+            print("\t",path)
         while not (path == None):
             for i in range(1,len(path)):
                 e = me.getEdge(path[i-1],path[i]).invert()
-            path = me.shortestPath(s,t)
+            path = me.shortestPath(s,t,verbose)
+            if verbose:
+                print("\t",path)
         r = []
         for e in me.edgeList:
             if (e.include):
                 if not ((e.source.ID == t) or (e.sink.ID == s)):
-                    line = [e.sink.ID,e.source.ID]
+                    line = (e.sink.ID,e.source.ID)
                     r.append(line)
         return r
     def findPrice(me,s,t):
-        #print("\nCall")
         for nodeID in me.nodes:
             me.findPriceNode(s,t,nodeID)
-            #print("\t",nodeID,me.nodes[nodeID].price)
         me.nodes["S"].price = 0
         me.nodes["T"].price = 0
     def findPriceNode(me,s,t,nodeID):

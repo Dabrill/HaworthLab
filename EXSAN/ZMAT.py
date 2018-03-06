@@ -59,9 +59,9 @@ def createZMAT(filepath):
     firstSplit = filename.split("_")
     sequence = firstSplit[0]
     secondSplit = firstSplit[1].split(".")
-    number = int(secondSplit[0][2:])
+    number = int(extractNumber(secondSplit[0]))
     PRINT("Making ZMAT for %s starting at residue %i "%(sequence,number))
-    MakeZMAT.SeqToZMAT(sequence,number)
+    MakeZMAT.SeqToZMAT(sequence,number,filename)
     shutil.copy(filename,"%s/%s"%(commonFolder,filename))
 class ZMAT:
     def __init__(me,filename):
@@ -89,16 +89,16 @@ class ZMAT:
         me.tor = tor
     def readReference(me,CONSTANTS):
         try:
-            target = PDBTools.readPDBFile("out.pdb")[0]
+            target = PDBTools.readAllInPDB("out.pdb")
         except:
-            target = PDBTools.readPDBFile("%s/out.pdb"%CONSTANTS["commonFolder"])[0]
+            target = PDBTools.readAllInPDB("%s/out.pdb"%CONSTANTS["commonFolder"])
         distNum = CONSTANTS["referenceAtomDistance"] - 1
-        dist = target.atoms[distNum]
+        dist = target[distNum]
        
         angNum = CONSTANTS["referenceAtomAngle"] - 1
-        ang = target.atoms[angNum]
+        ang = target[angNum]
         torNum = CONSTANTS["referenceAtomTorsion"] - 1
-        tor = target.atoms[torNum]
+        tor = target[torNum]
         me.setReference(dist,ang,tor)
     def convertToCartesian(me,fxvr,poseNum,chain = "L"):
         fPose = fxvr.poses[poseNum].val
@@ -110,7 +110,8 @@ class ZMAT:
             a = me.zAtoms[i]
             entry = [a.tor,a.ang,a.dist]
             atomParams.append(entry)
-
+        #print(fxvr.atom)
+        #print(fxvr.kind)
         for i in range(len(fxvr.atom)):
             atom = fxvr.atom[i] - 4
             kind = fxvr.kind[i]
@@ -432,5 +433,18 @@ def zmatName(step):
 def zmatLoc(step):
     #print("step  ",step)
     return "%s/%s"%(commonFolder,zmatName(step))
+
+def extractNumber(full):
+    digit = ""
+    for c in reversed(full):
+        if c in "0123456789":
+            digit = c + digit
+        else:
+            return digit
+    return digit
+'''
+if __name__ == "__main__":
+    print(numberify("supercalifraglistic1"))
+'''
 #test()
 #testDense()

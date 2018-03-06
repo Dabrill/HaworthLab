@@ -380,7 +380,7 @@ class Atom:
     backboneTable = ("C","CA","N","OXT")
     def __init__(self,ln):
         ltype = ln[:6]
-        isHetero = (ltype == "HETATM")
+        isHetero = (ltype == "HETATM") or (ltype == "HETA  ")
         if (ltype == "ATOM  ") or isHetero:
             self.atomNumber = int(ln[7:11])
             self.atomType = ln[12:16].replace(" ","")
@@ -579,6 +579,11 @@ def readPDBFile(file,excludeWater = True):
     if (len(newMol) > 0):
         table.append(Peptide(newMol,mol,CAList))
     return table
+def readAllInPDB(file):
+    inf = open(file,'r')
+    ret = [Atom(line) for line in inf.readlines()]
+    inf.close()
+    return ret
 def fileToStringArray(file):
     fileRead = open(file,'r')
     back = []
@@ -700,3 +705,4 @@ def readHetWaters(filename):
                 a = Atom(l)
                 atoms.append(a)
     return atoms
+

@@ -39,7 +39,19 @@ class WaterLayer:
             H1 = newBlankHydrogen(1)
             H1.setAtomLocationByZMAT(O,inWater.O,inWater.H1,1.00,0.01,180)
             H2 = newBlankHydrogen(2)
-            H2.setAtomLocationByZMAT(O,H1,inWater.O,1.00,109.4,70)
+            try:
+                H2.setAtomLocationByZMAT(O,H1,inWater.O,1.00,109.4,70)
+            except:
+                H2.setAtomLocationByZMAT(O,H1,inWater.H1,1.00,109.4,70)
+                '''
+                print("This should not occur")
+                print(inWater.O)
+                print("Other O: ",inWater.O.location)
+                print("H1     : ",H1.location)
+                print("O      : ",O.location)
+                print("O-H1-oO: ",O.angle(H1,inWater.O))
+                raise Exception("Son of a diddly")
+                '''
             ret = Water(O,H1,H2)
             ret.type = "CANDIDATE"
             ret.donors = [inWater]

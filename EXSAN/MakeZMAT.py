@@ -2,7 +2,10 @@ import PDBTools
 import ZMAT
 SidechainData = None
 
-CTerminalChar = "#"
+NTerminalChar = "("
+CTerminalChar = ")"
+SpecialChars = [NTerminalChar,CTerminalChar]
+
 def loadJSON():
     global SidechainData
     import os
@@ -37,7 +40,6 @@ def SeqToZMAT(taggedSequence,centerResidue,outputFilename = None):
         atoms.append(zAtm)
         zAtomDict[(resNum,atmName)] = zAtm
     cTerminal = (taggedSequence[len(taggedSequence)-1] == CTerminalChar)
-    print(cTerminal)
     sequence = taggedSequence.replace(CTerminalChar,"")
     seqResidues = [None]
     for letter in sequence:
@@ -56,7 +58,7 @@ def SeqToZMAT(taggedSequence,centerResidue,outputFilename = None):
             applyGeo(zAtom,SidechainData["reverseBackbone"][atmName])
             pushAtom(zAtom)
             applyThreeQueue(zAtom,threeQueue)
-            print(zAtom.toZMATLine())
+            #print(zAtom.toZMATLine())
     threeQueue = [4,5,6]
     for resNum in range(centerResidue+1,highestResidue+1):
         for atmName in SidechainData["forwardBackbone"]["Order"]:
@@ -64,7 +66,7 @@ def SeqToZMAT(taggedSequence,centerResidue,outputFilename = None):
             applyGeo(zAtom,SidechainData["forwardBackbone"][atmName])
             pushAtom(zAtom)
             applyThreeQueue(zAtom,threeQueue)
-            print(zAtom.toZMATLine())
+            #print(zAtom.toZMATLine())
     for resNum in range(1,highestResidue+1):
         resType = seqResidues[resNum]
         resData = SidechainData[resType]
@@ -86,6 +88,7 @@ def SeqToZMAT(taggedSequence,centerResidue,outputFilename = None):
                 applyGeo(zAtom,SidechainData["O"])
                 if (resNum == highestResidue):
                     zAtom.tor =  0.00
+                    zAtom.torAtom = 1
             pushAtom(zAtom)
     atmName = "CB"
     for resNum in range(1,highestResidue+1):
@@ -116,7 +119,7 @@ def makeZMATFile(atoms,filename):
     outf = open(filename,'w')
     outf.write("%6i MUL\n"%(len(atoms)))
     for a in atoms:
-        print(a.toZMATLine())
+        #print(a.toZMATLine())
         outf.write("%s\n"%a.toZMATLine())
     outf.close()
 def applyThreeQueue(zAtm,threeQ):
